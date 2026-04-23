@@ -28,7 +28,12 @@ class Settings(BaseSettings):
             raise ValueError("ADMIN_PASSWORD environment variable is required")
         token_path = "/var/lib/router-api/.token_seed"
         if os.path.exists(token_path):
-            self.secret_token = open(token_path).read().strip()
+            seed = open(token_path).read().strip()
+            if len(seed) < 32:
+                raise ValueError(
+                    f"Token seed file {token_path} must contain at least 32 characters"
+                )
+            self.secret_token = seed
 
 settings = Settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -58,8 +63,11 @@ def verify_token(token: str) -> Optional[dict]:
     except JWTError:
         return None
 
-def authenticate_admin(password: str) -> bool:
-    return pwd_context.verify(password, pwd_context.hash(settings.admin_password))
+def authenticate_admin(plain_password: str) -> bool:
+    """Verify plain_password against the stored bcrypt hash in ADMIN_PASSWORD."""
+    if not settings.admin_password:
+        return False
+    return pwd_context.verify(plain_password, settings.admin_password)
 
 def get_initial_token() -> str:
     return settings.secret_token

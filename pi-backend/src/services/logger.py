@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+from collections import deque
 from ..models.schemas import RouterLog
 
 LOG_FILE = Path("/var/log/router-api.log")
@@ -26,7 +27,7 @@ audit_handler.setFormatter(logging.Formatter("%(asctime)s - AUDIT - %(message)s"
 audit_logger.addHandler(audit_handler)
 audit_logger.setLevel(logging.INFO)
 
-_logs: List[RouterLog] = []
+_logs: deque = deque(maxlen=1000)
 MAX_LOGS = 1000
 
 def log(level: str, source: str, message: str):
@@ -37,9 +38,6 @@ def log(level: str, source: str, message: str):
         message=message
     )
     _logs.append(entry)
-    if len(_logs) > MAX_LOGS:
-        _logs.pop(0)
-    
     getattr(logger, level.lower(), logger.info)(f"[{source}] {message}")
 
 def audit(action: str, details: dict, ip: Optional[str] = None, token_prefix: Optional[str] = None):
@@ -62,4 +60,5 @@ def audit_rate_limit(ip: str, endpoint: str):
     audit("RATE_LIMIT_EXCEEDED", {"endpoint": endpoint}, ip)
 
 def get_logs(limit: int = 100) -> List[RouterLog]:
-    return _logs[-limit:]
+    items = list(_logs)
+    return items[-limit:]

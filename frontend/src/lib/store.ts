@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export interface RouterStatus {
   wan_ip?: string;
@@ -65,6 +66,7 @@ export interface PortForward {
 export interface GuestNetwork {
   ssid: string;
   password: string;
+  channel: number;
   enabled: boolean;
   isolated: boolean;
   max_clients: number;
@@ -117,40 +119,53 @@ interface StoreState {
   removeRouter: (id: string) => void;
 }
 
-export const useStore = create<StoreState>((set) => ({
-  piUrl: 'http://192.168.1.1',
-  token: '',
-  sidebarOpen: true,
-  status: null,
-  wifiSettings: null,
-  vpnSettings: null,
-  networkStats: null,
-  clients: [],
-  firewallRules: [],
-  portForwards: [],
-  guestNetwork: null,
-  logs: [],
-  routers: [],
-  activeRouterId: null,
-  setCredentials: (url: string, token: string) => set({ piUrl: url, token }),
-  setSidebarOpen: (open: boolean) => set({ sidebarOpen: open }),
-  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-  setStatus: (data: RouterStatus) => set({ status: data }),
-  setWifiSettings: (data: WifiSettings) => set({ wifiSettings: data }),
-  setVpnSettings: (data: VpnSettings) => set({ vpnSettings: data }),
-  setNetworkStats: (data: NetworkStats) => set({ networkStats: data }),
-  setClients: (clients: ClientDevice[]) => set({ clients }),
-  setFirewallRules: (rules: FirewallRule[]) => set({ firewallRules: rules }),
-  setPortForwards: (forwards: PortForward[]) => set({ portForwards: forwards }),
-  setGuestNetwork: (network: GuestNetwork) => set({ guestNetwork: network }),
-  setLogs: (logs: RouterLog[]) => set({ logs }),
-  setRouters: (routers: Router[]) => set({ routers }),
-  setActiveRouter: (id: string | null) => set({ activeRouterId: id }),
-  addRouter: (router: Router) => set((state) => ({ 
-    routers: [...state.routers, router] 
-  })),
-  removeRouter: (id: string) => set((state) => ({ 
-    routers: state.routers.filter(r => r.id !== id),
-    activeRouterId: state.activeRouterId === id ? null : state.activeRouterId
-  })),
-}));
+export const useStore = create<StoreState>()(
+  persist(
+    (set) => ({
+      piUrl: 'http://192.168.1.1',
+      token: '',
+      sidebarOpen: true,
+      status: null,
+      wifiSettings: null,
+      vpnSettings: null,
+      networkStats: null,
+      clients: [],
+      firewallRules: [],
+      portForwards: [],
+      guestNetwork: null,
+      logs: [],
+      routers: [],
+      activeRouterId: null,
+      setCredentials: (url: string, token: string) => set({ piUrl: url, token }),
+      setSidebarOpen: (open: boolean) => set({ sidebarOpen: open }),
+      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+      setStatus: (data: RouterStatus) => set({ status: data }),
+      setWifiSettings: (data: WifiSettings) => set({ wifiSettings: data }),
+      setVpnSettings: (data: VpnSettings) => set({ vpnSettings: data }),
+      setNetworkStats: (data: NetworkStats) => set({ networkStats: data }),
+      setClients: (clients: ClientDevice[]) => set({ clients }),
+      setFirewallRules: (rules: FirewallRule[]) => set({ firewallRules: rules }),
+      setPortForwards: (forwards: PortForward[]) => set({ portForwards: forwards }),
+      setGuestNetwork: (network: GuestNetwork) => set({ guestNetwork: network }),
+      setLogs: (logs: RouterLog[]) => set({ logs }),
+      setRouters: (routers: Router[]) => set({ routers }),
+      setActiveRouter: (id: string | null) => set({ activeRouterId: id }),
+      addRouter: (router: Router) => set((state) => ({ 
+        routers: [...state.routers, router] 
+      })),
+      removeRouter: (id: string) => set((state) => ({ 
+        routers: state.routers.filter(r => r.id !== id),
+        activeRouterId: state.activeRouterId === id ? null : state.activeRouterId
+      })),
+    }),
+    {
+      name: 'routeradm-store',
+      partialize: (state) => ({
+        piUrl: state.piUrl,
+        sidebarOpen: state.sidebarOpen,
+        routers: state.routers,
+        activeRouterId: state.activeRouterId,
+      }),
+    }
+  )
+);

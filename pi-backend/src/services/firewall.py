@@ -44,9 +44,9 @@ def _apply_iptables_rule(rule: FirewallRule, add: bool = True) -> bool:
         args.extend(["-s", rule.source_ip])
     
     if rule.action in ("allow", "accept"):
-        args.append("-j ACCEPT")
+        args.extend(["-j", "ACCEPT"])
     else:
-        args.append("-j DROP")
+        args.extend(["-j", "DROP"])
     
     result = _run(args)
     return result == ""
@@ -71,13 +71,13 @@ def add_firewall_rule(rule: FirewallRule) -> bool:
     if not rule.id:
         rule.id = str(uuid.uuid4())[:8]
     
-    state.add_firewall_rule(rule)
-    
     if rule.enabled:
-        if _apply_iptables_rule(rule, True):
-            _save_iptables()
-            return True
+        if not _apply_iptables_rule(rule, True):
+            log("error", "firewall", f"iptables rejected rule port={rule.port}")
+            return False
+        _save_iptables()
     
+    state.add_firewall_rule(rule)
     return True
 
 def delete_firewall_rule(rule_id: str) -> bool:
@@ -135,7 +135,11 @@ def apply_firewall_rules() -> bool:
     return result == ""
 
 def init_firewall():
+    _run(["iptables", "-F", "INPUT"])
     _run(["iptables", "-A", "INPUT", "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT"])
     _run(["iptables", "-A", "INPUT", "-i", "lo", "-j", "ACCEPT"])
     _run(["iptables", "-A", "INPUT", "-p", "icmp", "-j", "ACCEPT"])
-    log("info", "firewall", "Firewall initialized")
+    for rule in state.firewall:
+        if rule.enabled:
+            _apply_iptables_rule(rule, True)
+    log("info", "firewall", "Firewall initialised")

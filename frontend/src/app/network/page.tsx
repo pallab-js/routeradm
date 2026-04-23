@@ -63,8 +63,17 @@ export default function NetworkPage() {
     }
 
     loadStats();
-    return () => { mounted = false; };
-  }, [piUrl, token, fetchNetworkStats]);
+    measureLatency();
+    
+    const interval = setInterval(() => {
+      loadStats();
+      measureLatency();
+    }, 5000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [piUrl, token]);
 
   const stats = useStore(state => state.networkStats);
 
@@ -124,7 +133,7 @@ export default function NetworkPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <Card>
-            <h3>Bandwidth Graph</h3>
+            <h3>Download Bandwidth</h3>
             <div className="h-48 flex items-end gap-1">
               {rxHistory.map((val, i) => (
                 <div
@@ -141,7 +150,7 @@ export default function NetworkPage() {
             </div>
           </Card>
           <Card>
-            <h3>Bandwidth Graph</h3>
+            <h3>Upload Bandwidth</h3>
             <div className="h-48 flex items-end gap-1">
               {txHistory.map((val, i) => (
                 <div

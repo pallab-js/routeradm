@@ -1,6 +1,7 @@
 import subprocess
 import os
 import uuid
+import re
 from pathlib import Path
 from typing import Optional, List
 from ..models.schemas import WifiSettings
@@ -10,6 +11,13 @@ from ..services.auth import settings
 
 HOSTAPD_CONF = "/etc/hostapd/hostapd.conf"
 HOSTAPD_DEFAULT = "/etc/default/hostapd"
+
+_SAFE_HOSTAPD_VALUE = re.compile(r'^[^\n\r\x00]+$')
+
+def _sanitize_hostapd_value(value: str, field: str) -> str:
+    if not _SAFE_HOSTAPD_VALUE.match(value):
+        raise ValueError(f"hostapd config field '{field}' contains illegal characters")
+    return value
 
 def _run(args: List[str]) -> str:
     try:
@@ -35,13 +43,15 @@ def _set_permissions(path: str, mode: int = 0o600) -> bool:
 
 def _write_hostapd_config(wifi: WifiSettings) -> bool:
     try:
+        ssid = _sanitize_hostapd_value(wifi.ssid, "ssid")
+        password = _sanitize_hostapd_value(wifi.password, "wpa_passphrase")
         config = f"""interface={settings.wifi_interface}
 driver=nl80211
-ssid={wifi.ssid}
+ssid={ssid}
 hw_mode=g
 channel={wifi.channel}
 wpa=2
-wpa_passphrase={wifi.password}
+wpa_passphrase={password}
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=CCMP
 rsn_pairwise=CCMP
@@ -62,6 +72,9 @@ country_code=US
         
         log("info", "wifi", f"hostapd config written: {wifi.ssid}")
         return True
+    except ValueError as e:
+        log("error", "wifi", str(e))
+        return False
     except Exception as e:
         log("error", "wifi", f"Failed to write hostapd config: {e}")
         return False

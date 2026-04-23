@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { usePi } from "@/hooks/usePi";
 import { Card } from "@/components/ui/card";
@@ -8,18 +8,35 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TopBar } from "@/components/layout/topbar";
 import { Wifi, Shield, Users, Signal, Globe, Loader2 } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 
 export default function DashboardPage() {
   const { piUrl, token, setCredentials, status } = useStore();
   const { refresh } = usePi();
   const [url, setUrl] = useState(piUrl);
+  const [inputToken, setInputToken] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadSaved() {
+      try {
+        const savedToken = await invoke<string>("get_credentials", { url: piUrl });
+        if (savedToken) {
+          setCredentials(piUrl, savedToken);
+        }
+      } catch {
+        // No saved credentials yet
+      }
+    }
+    loadSaved();
+  }, [piUrl, setCredentials]);
 
   const handleConnect = async () => {
     setError("");
     setIsLoading(true);
-    setCredentials(url, token);
+    const fullUrl = url.startsWith("http") ? url : `http://${url}`;
+    setCredentials(fullUrl, inputToken);
     
     const result = await refresh();
     if (!result) {
@@ -48,8 +65,8 @@ export default function DashboardPage() {
                 <label className="block text-sm text-text-secondary mb-2">API Token</label>
                 <Input
                   type="password"
-                  value={token}
-                  onChange={(e) => setCredentials(url, e.target.value)}
+                  value={inputToken}
+                  onChange={(e) => setInputToken(e.target.value)}
                   placeholder="Enter your API token"
                 />
               </div>

@@ -19,6 +19,7 @@ export default function GuestPage() {
 
   const [ssid, setSsid] = useState("");
   const [password, setPassword] = useState("");
+  const [channel, setChannel] = useState(6);
   const [enabled, setEnabled] = useState(false);
   const [isolated, setIsolated] = useState(true);
   const [maxClients, setMaxClients] = useState(10);
@@ -35,6 +36,7 @@ export default function GuestPage() {
       if (mounted && data) {
         setSsid(data.ssid);
         setPassword(data.password);
+        setChannel(data.channel);
         setEnabled(data.enabled);
         setIsolated(data.isolated);
         setMaxClients(data.max_clients);
@@ -54,6 +56,7 @@ export default function GuestPage() {
     const success = await saveGuestNetwork({
       ssid,
       password,
+      channel,
       enabled,
       isolated,
       max_clients: maxClients,

@@ -52,18 +52,20 @@ export default function FirewallPage() {
   const portForwards = useStore(state => state.portForwards);
 
   const handleAddFirewallRule = async () => {
-    if (newRule.port && newRule.description) {
-      await addFirewallRule({
-        id: crypto.randomUUID(),
-        port: newRule.port,
-        protocol: newRule.protocol || "tcp",
-        action: newRule.action || "allow",
-        enabled: newRule.enabled ?? true,
-        description: newRule.description,
-      } as FirewallRule);
-      setNewRule({ port: 0, protocol: "tcp", action: "allow", enabled: true, description: "" });
-      await fetchFirewallRules();
+    const port = newRule.port ?? 0;
+    if (port < 1 || port > 65535) {
+      return;
     }
+    await addFirewallRule({
+      id: crypto.randomUUID(),
+      port,
+      protocol: newRule.protocol || "tcp",
+      action: newRule.action || "allow",
+      enabled: newRule.enabled ?? true,
+      description: newRule.description || "",
+    } as FirewallRule);
+    setNewRule({ port: 0, protocol: "tcp", action: "allow", enabled: true, description: "" });
+    await fetchFirewallRules();
   };
 
   const handleAddPortForward = async () => {
@@ -142,7 +144,6 @@ export default function FirewallPage() {
                   >
                     <option value="tcp">TCP</option>
                     <option value="udp">UDP</option>
-                    <option value="both">Both</option>
                   </select>
                 </div>
                 <div>
@@ -153,7 +154,7 @@ export default function FirewallPage() {
                     className="w-full px-3 py-1.5 bg-bg-deep border border-border-subtle rounded-md text-sm text-text-primary"
                   >
                     <option value="allow">Allow</option>
-                    <option value="deny">Deny</option>
+                    <option value="drop">Drop</option>
                   </select>
                 </div>
                 <div>
@@ -237,7 +238,6 @@ export default function FirewallPage() {
                   >
                     <option value="tcp">TCP</option>
                     <option value="udp">UDP</option>
-                    <option value="both">Both</option>
                   </select>
                 </div>
                 <div>

@@ -8,14 +8,17 @@ interface TopBarProps {
 }
 
 export function TopBar({ onRefresh }: TopBarProps) {
-  const { status } = useStore();
+  const { status, token } = useStore();
+  const isConnected = !!token && !!status;
 
   return (
     <header className="h-9 border-b border-border-subtle bg-bg-page px-4 flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-green-brand" />
-          <span className="text-[13px] text-text-secondary">Connected</span>
+          <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-brand" : "bg-red-brand"}`} />
+          <span className="text-[13px] text-text-secondary">
+            {isConnected ? "Connected" : "Disconnected"}
+          </span>
         </div>
         {status?.wan_ip && (
           <span className="text-[11px] text-text-muted font-mono">

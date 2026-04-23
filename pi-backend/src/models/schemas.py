@@ -94,7 +94,7 @@ class ClientDevice(BaseModel):
         return v
 
 class FirewallRule(BaseModel):
-    id: str
+    id: str = ""
     port: int
     protocol: str
     action: str
@@ -136,7 +136,7 @@ class FirewallRule(BaseModel):
         return v
 
 class PortForward(BaseModel):
-    id: str
+    id: str = ""
     external_port: int
     internal_ip: str
     internal_port: int

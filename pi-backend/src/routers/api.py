@@ -6,19 +6,32 @@ from ..models.schemas import (
     RouterStatus, WifiSettings, VpnSettings, NetworkStats, 
     ClientDevice, FirewallRule, PortForward, GuestNetwork, RouterLog
 )
-from ..services.auth import settings
+from ..services.auth import settings, authenticate_admin, create_access_token, ACCESS_TOKEN_EXPIRE_HOURS
+from datetime import timedelta
+from pydantic import BaseModel
 from ..services import network, wifi, vpn, firewall, guest, logger as audit_logger
 from ..main import limiter
 
+import hmac
+
 router = APIRouter()
+
+_MAC_RE = __import__('re').compile(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
+
+def _validate_mac(mac: str) -> str:
+    if not _MAC_RE.match(mac):
+        raise HTTPException(status_code=422, detail="Invalid MAC address format")
+    return mac.upper()
 
 def verify_auth(authorization: Optional[str]) -> bool:
     if not authorization:
         audit_logger.audit_auth_attempt(False, None)
         return False
-    if authorization == f"Bearer {settings.secret_token}":
-        return True
-    return False
+    expected = f"Bearer {settings.secret_token}"
+    if not hmac.compare_digest(authorization, expected):
+        audit_logger.audit_auth_attempt(False, None)
+        return False
+    return True
 
 def get_client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
@@ -124,30 +137,47 @@ async def get_clients(request: Request, authorization: Optional[str] = Header(No
 @limiter.limit("20/minute")
 async def block_client(
     request: Request,
-    mac: str, 
+    mac: str,
     blocked: bool,
     authorization: Optional[str] = Header(None)
 ):
     if not verify_auth(authorization):
         raise HTTPException(status_code=401, detail="Invalid or missing token")
+    mac = _validate_mac(mac)
     from ..services.state import state
     state.block_client(mac, blocked)
     audit_logger.audit_config_change("block", "clients", {"mac": mac, "blocked": blocked}, get_client_ip(request))
     return {"success": True}
 
-@router.post("/clients/{mac}/rename")
+@router.put("/clients/{mac}/name")
 @limiter.limit("20/minute")
 async def rename_client(
     request: Request,
-    mac: str, 
+    mac: str,
     name: str,
     authorization: Optional[str] = Header(None)
 ):
     if not verify_auth(authorization):
         raise HTTPException(status_code=401, detail="Invalid or missing token")
+    mac = _validate_mac(mac)
     from ..services.state import state
     state.rename_client(mac, name)
     audit_logger.audit_config_change("rename", "clients", {"mac": mac, "name": name}, get_client_ip(request))
+    return {"success": True}
+
+@router.delete("/clients/{mac}")
+@limiter.limit("20/minute")
+async def forget_client(
+    request: Request,
+    mac: str,
+    authorization: Optional[str] = Header(None)
+):
+    if not verify_auth(authorization):
+        raise HTTPException(status_code=401, detail="Invalid or missing token")
+    mac = _validate_mac(mac)
+    from ..services.state import state
+    state.forget_client(mac)
+    audit_logger.audit_config_change("forget", "clients", {"mac": mac}, get_client_ip(request))
     return {"success": True}
 
 @router.get("/firewall", response_model=List[FirewallRule])
@@ -246,16 +276,35 @@ async def save_guest_network(
 @limiter.limit("30/minute")
 async def get_logs(
     request: Request,
-    limit: int = 100, 
+    limit: int = 100,
     authorization: Optional[str] = Header(None)
 ):
     if not verify_auth(authorization):
         raise HTTPException(status_code=401, detail="Invalid or missing token")
+    limit = max(1, min(limit, 500))
     return audit_logger.get_logs(limit)
+
+class LoginRequest(BaseModel):
+    password: str
+
+@router.post("/login")
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginRequest):
+    if not authenticate_admin(body.password):
+        audit_logger.audit_auth_attempt(False, get_client_ip(request))
+        raise HTTPException(status_code=401, detail="Invalid password")
+    token = create_access_token(
+        {"sub": "admin"},
+        expires_delta=timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    )
+    audit_logger.audit_auth_attempt(True, get_client_ip(request))
+    return {"access_token": token, "token_type": "bearer"}
+
+import time as _time
 
 @router.get("/ping")
 @limiter.limit("30/minute")
 async def ping_router(request: Request, authorization: Optional[str] = Header(None)):
     if not verify_auth(authorization):
         raise HTTPException(status_code=401, detail="Invalid or missing token")
-    return {"pong": True, "latency_ms": 0}
+    return {"pong": True, "timestamp": _time.time()}

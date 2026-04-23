@@ -1,50 +1,61 @@
 import subprocess
 import re
 import time
+import shutil
 from typing import List, Optional, Dict
 from ..models.schemas import RouterStatus, NetworkStats, ClientDevice
 from .logger import log
 from .state import state
 from ..services.auth import settings
 
-def _run(cmd: str) -> str:
+def _run(args: list[str]) -> str:
+    """Run a command as a list of arguments (no shell=True)."""
     try:
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=10
+            args,
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         return result.stdout.strip()
     except Exception as e:
-        log("error", "network", f"Command failed: {cmd} - {e}")
+        log("error", "network", f"Command failed: {' '.join(args)} - {e}")
         return ""
 
 def get_wan_ip() -> Optional[str]:
-    result = _run("curl -s ifconfig.me")
-    if not result:
-        result = _run("curl -s icanhazip.com")
-    if not result:
-        result = _run("hostname -I | awk '{print $1}'")
-    return result if result else None
+    result = _run(["ip", "route", "get", "1.1.1.1"])
+    for part in result.split():
+        if part not in ("via", "dev", "src", "uid") and "." in part:
+            try:
+                import ipaddress
+                ipaddress.IPv4Address(part)
+                return part
+            except Exception:
+                continue
+    return _run(["hostname", "-I"]).split(" ")[0] or None
 
 def get_wifi_ssid() -> str:
-    ssid = _run("iwgetid -r")
+    ssid = _run(["iwgetid", "-r"])
     return ssid if ssid else (state.wifi.ssid if state.wifi else "")
 
 def get_wifi_signal() -> int:
-    result = _run("iwconfig | grep 'wlan0' -A 5 | grep 'Signal' | awk '{gsub(/[^-0-9]/, \"\"); print $1}'")
+    result = _run(["iwconfig", settings.wifi_interface])
+    m = re.search(r"Signal level=(-\d+)", result)
     try:
-        return int(result) if result else -50
-    except:
+        return int(m.group(1)) if m else -50
+    except Exception:
         return -50
 
 def get_hostapd_status() -> bool:
-    result = _run("pgrep -f hostapd")
+    result = _run(["pgrep", "-f", "hostapd"])
     return result != ""
 
 def get_uptime() -> int:
-    result = _run("cat /proc/uptime | awk '{print int($1)}'")
     try:
-        return int(result) if result else 0
-    except:
+        with open("/proc/uptime") as f:
+            return int(float(f.read().split()[0]))
+    except Exception:
         return 0
 
 def get_network_stats() -> NetworkStats:
@@ -100,7 +111,7 @@ def get_connected_clients() -> List[ClientDevice]:
     clients = []
     current_time = int(time.time())
     
-    arp_output = _run("arp -n -i " + settings.wifi_interface)
+    arp_output = _run(["arp", "-n", "-i", settings.wifi_interface])
     if not arp_output:
         return clients
     
@@ -108,20 +119,20 @@ def get_connected_clients() -> List[ClientDevice]:
         if "ether" in line.lower():
             parts = line.split()
             if len(parts) >= 3:
-                mac = parts[2].lower()
                 ip = parts[0]
+                mac = parts[2].lower()
+                if ip == "(incomplete)":
+                    continue
                 blocked = state.is_blocked(mac)
-                
-                if not blocked and ip != "(incomplete)":
-                    clients.append(ClientDevice(
-                        mac=mac,
-                        ip=ip,
-                        hostname=None,
-                        name=state._clients.get(mac, {}).get("name"),
-                        connected_at=current_time - 300,
-                        rx_bytes=0,
-                        tx_bytes=0,
-                        blocked=False
-                    ))
+                clients.append(ClientDevice(
+                    mac=mac,
+                    ip=ip,
+                    hostname=None,
+                    name=state._clients.get(mac, {}).get("name"),
+                    connected_at=current_time - 300,
+                    rx_bytes=0,
+                    tx_bytes=0,
+                    blocked=blocked
+                ))
     
     return clients

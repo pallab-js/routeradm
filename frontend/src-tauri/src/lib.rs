@@ -1,8 +1,20 @@
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use std::net::IpAddr;
+use std::sync::OnceLock;
 use url::Url;
 use std::env;
+
+static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+fn http_client() -> &'static reqwest::Client {
+    HTTP_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .expect("Failed to build HTTP client")
+    })
+}
 
 fn validate_url(url: &str) -> Result<Url, String> {
     let parsed = Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
@@ -115,7 +127,7 @@ pub struct RouterLog {
 #[command]
 async fn fetch_wifi_settings(url: String, token: String) -> Result<WifiSettings, String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .get(&format!("{}/api/wifi", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -128,7 +140,7 @@ async fn fetch_wifi_settings(url: String, token: String) -> Result<WifiSettings,
 #[command]
 async fn save_wifi_settings(url: String, token: String, settings: WifiSettings) -> Result<(), String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .put(&format!("{}/api/wifi", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -145,7 +157,7 @@ async fn save_wifi_settings(url: String, token: String, settings: WifiSettings) 
 #[command]
 async fn fetch_vpn_settings(url: String, token: String) -> Result<VpnSettings, String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .get(&format!("{}/api/vpn", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -158,7 +170,7 @@ async fn fetch_vpn_settings(url: String, token: String) -> Result<VpnSettings, S
 #[command]
 async fn save_vpn_settings(url: String, token: String, settings: VpnSettings) -> Result<(), String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .put(&format!("{}/api/vpn", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -175,7 +187,7 @@ async fn save_vpn_settings(url: String, token: String, settings: VpnSettings) ->
 #[command]
 async fn toggle_vpn(url: String, token: String, enabled: bool) -> Result<(), String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let vpn_url = format!("{}/api/vpn/toggle?enabled={}", url, enabled);
     let res = client
         .post(&vpn_url)
@@ -192,7 +204,7 @@ async fn toggle_vpn(url: String, token: String, enabled: bool) -> Result<(), Str
 #[command]
 async fn fetch_status(url: String, token: String) -> Result<RouterStatus, String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .get(&format!("{}/api/status", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -241,7 +253,7 @@ async fn discover_devices() -> Vec<String> {
 #[command]
 async fn fetch_network_stats(url: String, token: String) -> Result<NetworkStats, String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .get(&format!("{}/api/network/stats", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -254,7 +266,7 @@ async fn fetch_network_stats(url: String, token: String) -> Result<NetworkStats,
 #[command]
 async fn fetch_clients(url: String, token: String) -> Result<Vec<ClientDevice>, String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .get(&format!("{}/api/clients", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -267,7 +279,7 @@ async fn fetch_clients(url: String, token: String) -> Result<Vec<ClientDevice>, 
 #[command]
 async fn block_client(url: String, token: String, mac: String, blocked: bool) -> Result<(), String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .post(&format!("{}/api/clients/{}/block?blocked={}", url, mac, blocked))
         .header("Authorization", format!("Bearer {}", token))
@@ -283,7 +295,7 @@ async fn block_client(url: String, token: String, mac: String, blocked: bool) ->
 #[command]
 async fn rename_client(url: String, token: String, mac: String, name: String) -> Result<(), String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .put(&format!("{}/api/clients/{}/name", url, mac))
         .header("Authorization", format!("Bearer {}", token))
@@ -300,7 +312,7 @@ async fn rename_client(url: String, token: String, mac: String, name: String) ->
 #[command]
 async fn fetch_firewall_rules(url: String, token: String) -> Result<Vec<FirewallRule>, String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .get(&format!("{}/api/firewall", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -313,7 +325,7 @@ async fn fetch_firewall_rules(url: String, token: String) -> Result<Vec<Firewall
 #[command]
 async fn add_firewall_rule(url: String, token: String, rule: FirewallRule) -> Result<(), String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .post(&format!("{}/api/firewall", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -330,7 +342,7 @@ async fn add_firewall_rule(url: String, token: String, rule: FirewallRule) -> Re
 #[command]
 async fn delete_firewall_rule(url: String, token: String, rule_id: String) -> Result<(), String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .delete(&format!("{}/api/firewall/{}", url, rule_id))
         .header("Authorization", format!("Bearer {}", token))
@@ -346,7 +358,7 @@ async fn delete_firewall_rule(url: String, token: String, rule_id: String) -> Re
 #[command]
 async fn fetch_port_forwards(url: String, token: String) -> Result<Vec<PortForward>, String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .get(&format!("{}/api/portforward", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -359,7 +371,7 @@ async fn fetch_port_forwards(url: String, token: String) -> Result<Vec<PortForwa
 #[command]
 async fn add_port_forward(url: String, token: String, forward: PortForward) -> Result<(), String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .post(&format!("{}/api/portforward", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -376,7 +388,7 @@ async fn add_port_forward(url: String, token: String, forward: PortForward) -> R
 #[command]
 async fn delete_port_forward(url: String, token: String, forward_id: String) -> Result<(), String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .delete(&format!("{}/api/portforward/{}", url, forward_id))
         .header("Authorization", format!("Bearer {}", token))
@@ -392,7 +404,7 @@ async fn delete_port_forward(url: String, token: String, forward_id: String) -> 
 #[command]
 async fn fetch_guest_network(url: String, token: String) -> Result<GuestNetwork, String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .get(&format!("{}/api/guest", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -405,7 +417,7 @@ async fn fetch_guest_network(url: String, token: String) -> Result<GuestNetwork,
 #[command]
 async fn save_guest_network(url: String, token: String, settings: GuestNetwork) -> Result<(), String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .put(&format!("{}/api/guest", url))
         .header("Authorization", format!("Bearer {}", token))
@@ -422,7 +434,7 @@ async fn save_guest_network(url: String, token: String, settings: GuestNetwork) 
 #[command]
 async fn fetch_logs(url: String, token: String, limit: u16) -> Result<Vec<RouterLog>, String> {
     validate_url(&url)?;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let res = client
         .get(&format!("{}/api/logs?limit={}", url, limit))
         .header("Authorization", format!("Bearer {}", token))
@@ -436,7 +448,7 @@ async fn fetch_logs(url: String, token: String, limit: u16) -> Result<Vec<Router
 async fn ping_router(url: String, token: String) -> Result<u32, String> {
     validate_url(&url)?;
     let start = std::time::Instant::now();
-    let client = reqwest::Client::new();
+    let client = http_client();
     let _ = client
         .get(&format!("{}/api/ping", url))
         .header("Authorization", format!("Bearer {}", token))

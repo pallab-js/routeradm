@@ -36,18 +36,41 @@ class StateManager:
                 self._firewall = [FirewallRule(**r) for r in data.get("firewall", [])]
                 self._port_forwards = [PortForward(**p) for p in data.get("port_forwards", [])]
                 self._blocked_macs = set(data.get("blocked_macs", []))
+                self._clients = {
+                    mac: {"name": name}
+                    for mac, name in data.get("client_names", {}).items()
+                }
             except Exception as e:
                 log("warn", "state", f"Failed to load state: {e}")
     
     def _save(self):
         try:
+            wifi_data = None
+            if self._wifi:
+                wifi_data = self._wifi.model_dump()
+                wifi_data["password"] = ""
+
+            guest_data = None
+            if self._guest:
+                guest_data = self._guest.model_dump()
+                guest_data["password"] = ""
+
+            vpn_data = None
+            if self._vpn:
+                vpn_data = {
+                    "provider": self._vpn.provider,
+                    "enabled": self._vpn.enabled,
+                    "config": "",
+                }
+
             data = {
-                "wifi": self._wifi.model_dump() if self._wifi else None,
-                "vpn": VpnSettings(provider=self._vpn.provider, enabled=self._vpn.enabled, config="") if self._vpn else None,
-                "guest": self._guest.model_dump() if self._guest else None,
+                "wifi": wifi_data,
+                "vpn": vpn_data,
+                "guest": guest_data,
                 "firewall": [r.model_dump() for r in self._firewall],
                 "port_forwards": [p.model_dump() for p in self._port_forwards],
-                "blocked_macs": list(self._blocked_macs)
+                "blocked_macs": list(self._blocked_macs),
+                "client_names": {mac: d.get("name", "") for mac, d in self._clients.items()},
             }
             STATE_FILE.write_text(json.dumps(data, indent=2))
             os.chmod(str(STATE_FILE), 0o600)
@@ -123,10 +146,17 @@ class StateManager:
     def is_blocked(self, mac: str) -> bool:
         return mac in self._blocked_macs
     
+    def forget_client(self, mac: str):
+        self._blocked_macs.discard(mac)
+        self._clients.pop(mac, None)
+        self._save()
+        log("info", "clients", f"Client {mac} forgotten")
+    
     def rename_client(self, mac: str, name: str):
-        if mac in self._clients:
-            self._clients[mac]["name"] = name
-            self._save()
-            log("info", "clients", f"Client {mac} renamed to {name}")
+        if mac not in self._clients:
+            self._clients[mac] = {}
+        self._clients[mac]["name"] = name
+        self._save()
+        log("info", "clients", f"Client {mac} renamed to {name}")
 
 state = StateManager()
