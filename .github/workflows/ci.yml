@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Lint frontend
+        run: cd frontend && npm run lint
+
+      - name: Build frontend
+        run: cd frontend && npm run build
+
+      - name: Check Rust
+        run: cd frontend/src-tauri && cargo check --target aarch64-apple-darwin
+
+      - name: Build Tauri
+        run: cd frontend && cargo tauri build --target aarch64-apple-darwin

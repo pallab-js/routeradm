@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+:root {
+  --bg-deep: #0f0f0f;
+  --bg-page: #171717;
+  --bg-elevated: #1e1e1e;
+  --bg-input: #2e2e2e;
+  --text-primary: #fafafa;
+  --text-secondary: #b4b4b4;
+  --text-muted: #898989;
+  --border-subtle: #242424;
+  --border-standard: #2e2e2e;
+  --border-prominent: #363636;
+  --border-light: #393939;
+  --border-tertiary: #434343;
+  --border-focus: #3ecf8e;
+  --green-brand: #3ecf8e;
+  --green-link: #00c573;
+  --green-border: rgba(62, 207, 142, 0.3);
+  --blue-brand: #007ac4;
+  --blue-bg: #0e639c;
+  --red-brand: #c44b4b;
+  --yellow-brand: #cca700;
+  --purple-brand: #8b5cf6;
+  --glass-dark: rgba(41, 41, 41, 0.84);
+}
+
+@theme inline {
+  --color-bg-deep: var(--bg-deep);
+  --color-bg-page: var(--bg-page);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-input: var(--bg-input);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-standard: var(--border-standard);
+  --color-border-prominent: var(--border-prominent);
+  --color-border-light: var(--border-light);
+  --color-border-tertiary: var(--border-tertiary);
+  --color-border-focus: var(--border-focus);
+  --color-blue-brand: var(--blue-brand);
+  --color-blue-bg: var(--blue-bg);
+  --color-green-brand: var(--green-brand);
+  --color-green-border: var(--green-border);
+  --color-red-brand: var(--red-brand);
+  --color-yellow-brand: var(--yellow-brand);
+  --color-purple-brand: var(--purple-brand);
+}
+
+body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: "Circular", custom-font, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, p, span, a, button, label, input, select {
+  font-weight: 400;
+}
+
+button, nav a {
+  font-weight: 500;
+}
+
+h1 {
+  font-size: 4.5rem;
+  line-height: 1.00;
+  letter-spacing: normal;
+}
+
+h2 {
+  font-size: 2.25rem;
+  line-height: 1.25;
+}
+
+h3 {
+  font-size: 1.5rem;
+  line-height: 1.33;
+  letter-spacing: -0.16px;
+}
+
+h4 {
+  font-size: 1.13rem;
+  line-height: 1.56;
+}
+
+.card-title {
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1.33;
+  letter-spacing: -0.16px;
+  color: var(--text-primary);
+}
+
+.card-body {
+  font-size: 0.88rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.code-label {
+  font-family: "Source Code Pro", Menlo, monospace;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-muted);
+}
