@@ -48,7 +48,8 @@ export default function GuestPage() {
 
     loadGuest();
     return () => { mounted = false; };
-  }, [piUrl, token, fetchGuestNetwork]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piUrl, token]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -135,6 +136,19 @@ export default function GuestPage() {
                   placeholder="Enter guest Wi-Fi password"
                   disabled={!enabled}
                 />
+              </div>
+              <div>
+                <label className="block text-sm text-text-secondary mb-2">Channel</label>
+                <select
+                  value={channel}
+                  onChange={e => setChannel(Number(e.target.value))}
+                  disabled={!enabled}
+                  className="w-full px-4 py-2 bg-bg-page border border-border-standard rounded-[6px] text-text-primary focus:outline-none focus:border-border-prominent disabled:opacity-50"
+                >
+                  {[1,2,3,4,5,6,7,8,9,10,11].map(ch => (
+                    <option key={ch} value={ch}>Channel {ch}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm text-text-secondary mb-2">Max Clients</label>

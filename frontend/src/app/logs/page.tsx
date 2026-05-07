@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePi } from "@/hooks/usePi";
 import { useStore } from "@/lib/store";
+import { api } from "@/lib/api";
 import { TopBar } from "@/components/layout/topbar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Info, AlertTriangle, Bug, RefreshCw, Search } from "lucide-react";
+import { AlertCircle, Info, AlertTriangle, Bug, RefreshCw, Search, Loader2 } from "lucide-react";
 
 function getLogIcon(level: string) {
   switch (level.toLowerCase()) {
@@ -28,32 +29,50 @@ function formatTimestamp(ts: number): string {
   return date.toLocaleString();
 }
 
+const POLL_INTERVAL = 10000;
+
 export default function LogsPage() {
   const { piUrl, token } = useStore();
-  const { fetchLogs, pingRouter, refresh } = usePi();
+  const setLogs = useStore(s => s.setLogs);
+  const logs = useStore(s => s.logs);
+  const { pingRouter, refresh } = usePi();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [limit, setLimit] = useState(100);
   const [filter, setFilter] = useState("");
   const [latency, setLatency] = useState(0);
   const [pinging, setPinging] = useState(false);
 
+  const limitRef = useRef(limit);
+  useEffect(() => { limitRef.current = limit; });
+
   useEffect(() => {
-    let mounted = true;
-
-    async function loadLogs() {
-      if (!piUrl || !token) {
-        if (mounted) setLoading(false);
-        return;
-      }
-      await fetchLogs(limit);
-      if (mounted) setLoading(false);
+    if (!piUrl || !token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      return;
     }
-
-    loadLogs();
+    let mounted = true;
+    setRefreshing(true);
+    api.fetchLogs(piUrl, token, limit).then(data => {
+      if (!mounted) return;
+      setLogs(data);
+      setLoading(false);
+      setRefreshing(false);
+    }).catch(() => {
+      if (mounted) { setLoading(false); setRefreshing(false); }
+    });
     return () => { mounted = false; };
-  }, [piUrl, token, limit, fetchLogs]);
+  }, [piUrl, token, limit, setLogs]);
 
-  const logs = useStore(state => state.logs);
+  useEffect(() => {
+    if (!piUrl || !token) return;
+    const interval = setInterval(() => {
+      api.fetchLogs(piUrl, token, limitRef.current).then(setLogs);
+    }, POLL_INTERVAL);
+    return () => clearInterval(interval);
+  }, [piUrl, token, setLogs]);
+
   const filteredLogs = filter
     ? logs.filter(
         log =>
@@ -70,9 +89,12 @@ export default function LogsPage() {
   };
 
   const handleRefresh = async () => {
-    setLoading(true);
-    await fetchLogs(limit);
-    setLoading(false);
+    setRefreshing(true);
+    try {
+      const data = await api.fetchLogs(piUrl, token, limitRef.current);
+      setLogs(data);
+    } catch { /* ignore */ }
+    setRefreshing(false);
   };
 
   const errorLogs = logs.filter(l => l.level === "error").length;
@@ -124,7 +146,8 @@ export default function LogsPage() {
         <Card className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3>Router Logs</h3>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              {refreshing && <Loader2 size={16} className="animate-spin text-text-secondary" />}
               <select
                 value={limit}
                 onChange={e => setLimit(Number(e.target.value))}
@@ -135,8 +158,8 @@ export default function LogsPage() {
                 <option value={200}>200 logs</option>
                 <option value={500}>500 logs</option>
               </select>
-              <Button variant="secondary" onClick={handleRefresh}>
-                <RefreshCw size={16} />
+              <Button variant="secondary" onClick={handleRefresh} disabled={refreshing}>
+                <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
               </Button>
             </div>
           </div>
@@ -150,7 +173,12 @@ export default function LogsPage() {
               className="w-full pl-10 pr-4 py-2 bg-bg-page border border-border-standard rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-prominent"
             />
           </div>
-          <div className="bg-bg-page rounded-lg overflow-auto max-h-96">
+          <div className="bg-bg-page rounded-lg overflow-auto max-h-96 relative">
+            {refreshing && (
+              <div className="absolute inset-0 bg-bg-page/60 flex items-center justify-center z-10">
+                <Loader2 size={24} className="animate-spin text-text-secondary" />
+              </div>
+            )}
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-bg-deep">
                 <tr className="text-left text-text-secondary">

@@ -2,6 +2,7 @@ import re
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from ipaddress import ip_address as ip_parse, AddressValueError
+from ..services._validation import validate_mac, validate_ip
 
 MAC_REGEX = re.compile(r'^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$')
 IP_REGEX = re.compile(r'^(\d{1,3}\.){3}\d{1,3}$')
@@ -211,16 +212,3 @@ class RouterLog(BaseModel):
             raise ValueError("Level must be debug, info, warn, or error")
         return v.lower()
 
-def validate_mac(mac: str) -> str:
-    if not MAC_REGEX.match(mac):
-        raise ValueError("Invalid MAC address format")
-    return mac.upper()
-
-def validate_ip(ip: str) -> str:
-    if not IP_REGEX.match(ip):
-        raise ValueError("Invalid IP address format")
-    try:
-        ip_parse(ip)
-    except AddressValueError:
-        raise ValueError("Invalid IP address")
-    return ip

@@ -83,6 +83,7 @@ export interface Router {
   id: string;
   name: string;
   url: string;
+  token?: string;
   status?: RouterStatus;
 }
 
@@ -162,6 +163,7 @@ export const useStore = create<StoreState>()(
       name: 'routeradm-store',
       partialize: (state) => ({
         piUrl: state.piUrl,
+        token: state.token,
         sidebarOpen: state.sidebarOpen,
         routers: state.routers,
         activeRouterId: state.activeRouterId,

@@ -1,74 +1,99 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { useStore } from "./store";
-import { invoke } from "@tauri-apps/api/core";
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+const mockStore = {
+  piUrl: 'http://192.168.1.1',
+  token: 'test-token',
+  setStatus: vi.fn(),
+  setWifiSettings: vi.fn(),
+  setVpnSettings: vi.fn(),
+  setNetworkStats: vi.fn(),
+  setClients: vi.fn(),
+  setFirewallRules: vi.fn(),
+  setPortForwards: vi.fn(),
+  setGuestNetwork: vi.fn(),
+  setLogs: vi.fn(),
+};
+
+const mockApi = {
+  fetchStatus: vi.fn(),
+  fetchNetworkStats: vi.fn(),
+  fetchWifiSettings: vi.fn(),
+  fetchVpnSettings: vi.fn(),
+  fetchClients: vi.fn(),
+  fetchFirewallRules: vi.fn(),
+  fetchPortForwards: vi.fn(),
+  fetchGuestNetwork: vi.fn(),
+  fetchLogs: vi.fn(),
+  saveWifiSettings: vi.fn(),
+  saveVpnSettings: vi.fn(),
+  toggleVpn: vi.fn(),
+  blockClient: vi.fn(),
+  renameClient: vi.fn(),
+  addFirewallRule: vi.fn(),
+  deleteFirewallRule: vi.fn(),
+  addPortForward: vi.fn(),
+  deletePortForward: vi.fn(),
+  saveGuestNetwork: vi.fn(),
+  pingRouter: vi.fn(),
+};
+
+vi.mock('@/lib/store', () => ({
+  useStore: () => mockStore,
 }));
 
-describe("usePi integration", () => {
+vi.mock('@/lib/api', () => ({
+  api: mockApi,
+}));
+
+describe('usePi', () => {
   beforeEach(() => {
-    useStore.setState({ piUrl: "http://192.168.1.1", token: "test-token", status: null });
     vi.clearAllMocks();
+    mockStore.piUrl = 'http://192.168.1.1';
+    mockStore.token = 'test-token';
   });
 
-  it("fetches status from router via Tauri invoke", async () => {
-    const mockStatus = {
-      wan_ip: "1.2.3.4",
-      clients: 5,
-      vpn_active: true,
-      ap_ssid: "TravelRouter",
-      signal_rssi: -45,
-    };
-    vi.mocked(invoke).mockResolvedValueOnce(mockStatus);
+  it('refresh fetches status and updates store', async () => {
+    const status = { wan_ip: '1.2.3.4', clients: 3, vpn_active: false, ap_ssid: 'MyRouter', signal_rssi: -50 };
+    mockApi.fetchStatus.mockResolvedValueOnce(status);
 
-    const { piUrl, token } = useStore.getState();
-    const result = await invoke("fetch_status", { url: piUrl, token });
+    const { usePi } = await import('@/hooks/usePi');
+    const result = await usePi().refresh();
 
-    expect(invoke).toHaveBeenCalledWith("fetch_status", {
-      url: "http://192.168.1.1",
-      token: "test-token",
-    });
-    expect(result).toEqual(mockStatus);
+    expect(mockApi.fetchStatus).toHaveBeenCalledWith('http://192.168.1.1', 'test-token');
+    expect(mockStore.setStatus).toHaveBeenCalledWith(status);
+    expect(result).toEqual(status);
   });
 
-  it("returns null when URL is missing", async () => {
-    useStore.setState({ piUrl: "", token: "test-token" });
-
-    const { piUrl, token } = useStore.getState();
-    if (!piUrl || !token) {
-      expect(true).toBe(true);
-    } else {
-      await invoke("fetch_status", { url: piUrl, token });
-    }
-
-    expect(invoke).not.toHaveBeenCalled();
-  });
-
-  it("returns null when token is missing", async () => {
-    useStore.setState({ piUrl: "http://192.168.1.1", token: "" });
-
-    const { piUrl, token } = useStore.getState();
-    if (!piUrl || !token) {
-      expect(true).toBe(true);
-    } else {
-      await invoke("fetch_status", { url: piUrl, token });
-    }
-
-    expect(invoke).not.toHaveBeenCalled();
-  });
-
-  it("handles invocation error gracefully", async () => {
-    vi.mocked(invoke).mockRejectedValueOnce(new Error("Network error"));
-
-    const { piUrl, token } = useStore.getState();
-    let result: { wan_ip: string; clients: number; vpn_active: boolean; ap_ssid: string; signal_rssi: number } | null = null;
-    try {
-      result = await invoke("fetch_status", { url: piUrl, token });
-    } catch {
-      result = null;
-    }
-
+  it('refresh returns null when no URL', async () => {
+    mockStore.piUrl = '';
+    const { usePi } = await import('@/hooks/usePi');
+    const result = await usePi().refresh();
     expect(result).toBeNull();
+  });
+
+  it('refresh returns null when no token', async () => {
+    mockStore.token = '';
+    const { usePi } = await import('@/hooks/usePi');
+    const result = await usePi().refresh();
+    expect(result).toBeNull();
+  });
+
+  it('handles fetch errors gracefully', async () => {
+    mockApi.fetchStatus.mockRejectedValueOnce(new Error('Network error'));
+    const { usePi } = await import('@/hooks/usePi');
+    const result = await usePi().refresh();
+    expect(result).toBeNull();
+  });
+
+  it('saveWifi calls api and updates store', async () => {
+    const settings = { ssid: 'MyNet', password: 'secret', channel: 6, enabled: true };
+    mockApi.saveWifiSettings.mockResolvedValueOnce({ success: true });
+
+    const { usePi } = await import('@/hooks/usePi');
+    const result = await usePi().saveWifi(settings);
+
+    expect(mockApi.saveWifiSettings).toHaveBeenCalledWith('http://192.168.1.1', 'test-token', settings);
+    expect(mockStore.setWifiSettings).toHaveBeenCalledWith(settings);
+    expect(result).toBe(true);
   });
 });

@@ -6,7 +6,8 @@ import { useStore } from "@/lib/store";
 import { TopBar } from "@/components/layout/topbar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Smartphone, Monitor, Tablet, Wifi, Ban } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Smartphone, Monitor, Tablet, Wifi, Ban, Edit2, Check, X } from "lucide-react";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -26,8 +27,10 @@ function getDeviceIcon(hostname?: string) {
 
 export default function ClientsPage() {
   const { piUrl, token } = useStore();
-  const { fetchClients, blockClient, refresh } = usePi();
+  const { fetchClients, blockClient, renameClient, refresh } = usePi();
   const [loading, setLoading] = useState(true);
+  const [editingMac, setEditingMac] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -42,14 +45,35 @@ export default function ClientsPage() {
     }
 
     loadClients();
-    return () => { mounted = false; };
-  }, [piUrl, token, fetchClients]);
+    const interval = setInterval(() => {
+      if (mounted && piUrl && token) fetchClients();
+    }, 10000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piUrl, token]);
 
   const clients = useStore(state => state.clients);
 
   const handleBlock = async (mac: string, blocked: boolean) => {
     await blockClient(mac, blocked);
     await fetchClients();
+  };
+
+  const handleRename = async (mac: string) => {
+    if (editingName.trim()) {
+      await renameClient(mac, editingName.trim());
+      await fetchClients();
+    }
+    setEditingMac(null);
+  };
+
+  const startRename = (mac: string, currentName: string) => {
+    setEditingMac(mac);
+    setEditingName(currentName);
   };
 
   const activeClients = clients.filter(c => !c.blocked);
@@ -103,9 +127,34 @@ export default function ClientsPage() {
                   <div className="flex items-center gap-3">
                     {getDeviceIcon(client.hostname)}
                     <div>
-                      <p className="font-medium">
-                        {client.name || client.hostname || "Unknown Device"}
-                      </p>
+                      {editingMac === client.mac ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={editingName}
+                            onChange={e => setEditingName(e.target.value)}
+                            className="h-7 text-sm"
+                            autoFocus
+                          />
+                          <button onClick={() => handleRename(client.mac)} className="p-1 text-green-brand">
+                            <Check size={16} />
+                          </button>
+                          <button onClick={() => setEditingMac(null)} className="p-1 text-text-muted">
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">
+                            {client.name || client.hostname || "Unknown Device"}
+                          </p>
+                          <button
+                            onClick={() => startRename(client.mac, client.name || client.hostname || "")}
+                            className="p-1 hover:bg-bg-deep rounded text-text-muted"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                        </div>
+                      )}
                       <p className="text-sm text-text-secondary">{client.ip}</p>
                       <p className="text-xs text-text-muted font-mono">{client.mac}</p>
                     </div>

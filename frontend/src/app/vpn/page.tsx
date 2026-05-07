@@ -39,7 +39,8 @@ export default function VpnPage() {
     
     loadVpn();
     return () => { mounted = false; };
-  }, [piUrl, token, fetchVpn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piUrl, token]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -124,14 +125,14 @@ export default function VpnPage() {
               </div>
               <div>
                 <label className="block text-sm text-text-secondary mb-2">
-                  {provider === "wireguard" ? "WireGuard Config (Base64)" : "OpenVPN Config"}
+                  {provider === "wireguard" ? "WireGuard Config" : "OpenVPN Config"}
                 </label>
                 <textarea
                   value={config}
                   onChange={(e) => setConfig(e.target.value)}
                   placeholder={
                     provider === "wireguard"
-                      ? "Paste Base64WireGuard config..."
+                      ? "[Interface]\nPrivateKey = ...\nAddress = ...\n\n[Peer]\nPublicKey = ...\nEndpoint = ...\nAllowedIPs = 0.0.0.0/0"
                       : "Paste OpenVPN config file..."
                   }
                   className="w-full px-3 py-2 bg-bg-deep border border-border-subtle rounded-md text-sm text-text-primary placeholder:text-text-muted h-32 resize-none"

@@ -1,30 +1,15 @@
-import subprocess
 import re
 import time
-import shutil
-from typing import List, Optional, Dict
+from typing import List, Optional
 from ..models.schemas import RouterStatus, NetworkStats, ClientDevice
 from .logger import log
 from .state import state
 from ..services.auth import settings
+from .utils import run, run_shell
 
-def _run(args: list[str]) -> str:
-    """Run a command as a list of arguments (no shell=True)."""
-    try:
-        result = subprocess.run(
-            args,
-            shell=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return result.stdout.strip()
-    except Exception as e:
-        log("error", "network", f"Command failed: {' '.join(args)} - {e}")
-        return ""
 
 def get_wan_ip() -> Optional[str]:
-    result = _run(["ip", "route", "get", "1.1.1.1"])
+    result = run(["ip", "route", "get", "1.1.1.1"], log_source="network")
     for part in result.split():
         if part not in ("via", "dev", "src", "uid") and "." in part:
             try:
@@ -33,23 +18,27 @@ def get_wan_ip() -> Optional[str]:
                 return part
             except Exception:
                 continue
-    return _run(["hostname", "-I"]).split(" ")[0] or None
+    return run(["hostname", "-I"], log_source="network").split(" ")[0] or None
+
 
 def get_wifi_ssid() -> str:
-    ssid = _run(["iwgetid", "-r"])
+    ssid = run(["iwgetid", "-r"], log_source="network")
     return ssid if ssid else (state.wifi.ssid if state.wifi else "")
 
+
 def get_wifi_signal() -> int:
-    result = _run(["iwconfig", settings.wifi_interface])
+    result = run(["iwconfig", settings.wifi_interface], log_source="network")
     m = re.search(r"Signal level=(-\d+)", result)
     try:
         return int(m.group(1)) if m else -50
     except Exception:
         return -50
 
+
 def get_hostapd_status() -> bool:
-    result = _run(["pgrep", "-f", "hostapd"])
+    result = run(["pgrep", "-f", "hostapd"], log_source="network")
     return result != ""
+
 
 def get_uptime() -> int:
     try:
@@ -58,12 +47,17 @@ def get_uptime() -> int:
     except Exception:
         return 0
 
+
+_prev_rx: int = 0
+_prev_tx: int = 0
+_prev_time: float = 0.0
+
+
 def get_network_stats() -> NetworkStats:
+    global _prev_rx, _prev_tx, _prev_time
     rx_bytes = 0
     tx_bytes = 0
-    rx_rate = 0
-    tx_rate = 0
-    
+
     try:
         with open("/proc/net/dev", "r") as f:
             for line in f:
@@ -71,32 +65,47 @@ def get_network_stats() -> NetworkStats:
                     parts = line.split()
                     rx_bytes = int(parts[1])
                     tx_bytes = int(parts[9])
-    except:
+    except Exception:
         pass
-    
+
+    now = time.time()
+    delta = now - _prev_time if _prev_time > 0 else 1
+    rx_rate = int((rx_bytes - _prev_rx) / delta) if _prev_rx > 0 else 0
+    tx_rate = int((tx_bytes - _prev_tx) / delta) if _prev_tx > 0 else 0
+    _prev_rx, _prev_tx, _prev_time = rx_bytes, tx_bytes, now
+
     return NetworkStats(
         rx_bytes=rx_bytes,
         tx_bytes=tx_bytes,
-        rx_rate=rx_rate,
-        tx_rate=tx_rate,
+        rx_rate=max(rx_rate, 0),
+        tx_rate=max(tx_rate, 0),
         wan_uptime=get_uptime(),
         cpu_usage=get_cpu_usage(),
         memory_usage=get_memory_usage()
     )
 
+
 def get_cpu_usage() -> float:
+    result = run_shell(
+        "top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%us,//'",
+        log_source="network"
+    )
     try:
-        result = _run("top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%us,//'")
         return float(result) if result else 0.0
-    except:
+    except Exception:
         return 0.0
 
+
 def get_memory_usage() -> float:
+    result = run_shell(
+        "free | grep Mem | awk '{printf \"%.1f\", ($3/$2) * 100}'",
+        log_source="network"
+    )
     try:
-        result = _run("free | grep Mem | awk '{printf \"%.1f\", ($3/$2) * 100}'")
         return float(result) if result else 0.0
-    except:
+    except Exception:
         return 0.0
+
 
 def get_router_status() -> RouterStatus:
     return RouterStatus(
@@ -107,14 +116,15 @@ def get_router_status() -> RouterStatus:
         signal_rssi=get_wifi_signal()
     )
 
+
 def get_connected_clients() -> List[ClientDevice]:
     clients = []
     current_time = int(time.time())
-    
-    arp_output = _run(["arp", "-n", "-i", settings.wifi_interface])
+
+    arp_output = run(["arp", "-n", "-i", settings.wifi_interface], log_source="network")
     if not arp_output:
         return clients
-    
+
     for line in arp_output.split("\n"):
         if "ether" in line.lower():
             parts = line.split()
@@ -128,11 +138,11 @@ def get_connected_clients() -> List[ClientDevice]:
                     mac=mac,
                     ip=ip,
                     hostname=None,
-                    name=state._clients.get(mac, {}).get("name"),
+                    name=state.get_client_name(mac),
                     connected_at=current_time - 300,
                     rx_bytes=0,
                     tx_bytes=0,
                     blocked=blocked
                 ))
-    
+
     return clients

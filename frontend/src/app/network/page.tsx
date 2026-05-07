@@ -26,7 +26,7 @@ function formatUptime(seconds: number): string {
 
 export default function NetworkPage() {
   const { piUrl, token } = useStore();
-  const { fetchNetworkStats } = usePi();
+  const { fetchNetworkStats, pingRouter } = usePi();
   const [loading, setLoading] = useState(true);
   const [latency, setLatency] = useState(0);
   const [rxHistory, setRxHistory] = useState<number[]>([]);
@@ -53,13 +53,8 @@ export default function NetworkPage() {
 
     async function measureLatency() {
       if (!piUrl || !token) return;
-      try {
-        const start = performance.now();
-        await fetch("ping", { method: "HEAD" });
-        setLatency(Math.round(performance.now() - start));
-      } catch {
-        setLatency(0);
-      }
+      const ms = await pingRouter();
+      if (ms > 0) setLatency(ms);
     }
 
     loadStats();
@@ -73,6 +68,7 @@ export default function NetworkPage() {
       mounted = false;
       clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [piUrl, token]);
 
   const stats = useStore(state => state.networkStats);

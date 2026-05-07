@@ -19,6 +19,8 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let mounted = true;
+
     async function loadSaved() {
       try {
         const savedToken = await invoke<string>("get_credentials", { url: piUrl });
@@ -29,8 +31,20 @@ export default function DashboardPage() {
         // No saved credentials yet
       }
     }
+
     loadSaved();
-  }, [piUrl, setCredentials]);
+
+    // Auto-poll status every 10s when connected
+    const interval = setInterval(() => {
+      if (mounted && token) refresh();
+    }, 10000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piUrl, token, setCredentials]);
 
   const handleConnect = async () => {
     setError("");

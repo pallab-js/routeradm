@@ -13,6 +13,7 @@ export default function FirewallPage() {
   const { piUrl, token } = useStore();
   const { fetchFirewallRules, addFirewallRule, deleteFirewallRule, fetchPortForwards, addPortForward, deletePortForward, refresh } = usePi();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"firewall" | "portforward">("firewall");
 
   const [newRule, setNewRule] = useState<Partial<FirewallRule>>({
@@ -21,6 +22,7 @@ export default function FirewallPage() {
     action: "allow",
     enabled: true,
     description: "",
+    source_ip: "",
   });
 
   const [newForward, setNewForward] = useState<Partial<PortForward>>({
@@ -46,7 +48,8 @@ export default function FirewallPage() {
 
     loadData();
     return () => { mounted = false; };
-  }, [piUrl, token, fetchFirewallRules, fetchPortForwards]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piUrl, token]);
 
   const firewallRules = useStore(state => state.firewallRules);
   const portForwards = useStore(state => state.portForwards);
@@ -54,34 +57,58 @@ export default function FirewallPage() {
   const handleAddFirewallRule = async () => {
     const port = newRule.port ?? 0;
     if (port < 1 || port > 65535) {
+      setError("Port must be 1-65535");
       return;
     }
-    await addFirewallRule({
+    setError("");
+    const rule: FirewallRule = {
       id: crypto.randomUUID(),
       port,
       protocol: newRule.protocol || "tcp",
       action: newRule.action || "allow",
       enabled: newRule.enabled ?? true,
       description: newRule.description || "",
-    } as FirewallRule);
-    setNewRule({ port: 0, protocol: "tcp", action: "allow", enabled: true, description: "" });
+      source_ip: newRule.source_ip || undefined,
+    };
+    await addFirewallRule(rule);
+    setNewRule({ port: 0, protocol: "tcp", action: "allow", enabled: true, description: "", source_ip: "" });
+    await fetchFirewallRules();
+  };
+
+  const handleDeleteRule = async (id: string) => {
+    await deleteFirewallRule(id);
     await fetchFirewallRules();
   };
 
   const handleAddPortForward = async () => {
-    if (newForward.external_port && newForward.internal_ip && newForward.internal_port) {
-      await addPortForward({
-        id: crypto.randomUUID(),
-        external_port: newForward.external_port,
-        internal_ip: newForward.internal_ip,
-        internal_port: newForward.internal_port,
-        protocol: newForward.protocol || "tcp",
-        enabled: newForward.enabled ?? true,
-        description: newForward.description,
-      } as PortForward);
-      setNewForward({ external_port: 0, internal_ip: "", internal_port: 0, protocol: "tcp", enabled: true, description: "" });
-      await fetchPortForwards();
+    const ext = newForward.external_port ?? 0;
+    const intr = newForward.internal_port ?? 0;
+    if (ext < 1 || ext > 65535 || intr < 1 || intr > 65535) {
+      setError("Ports must be 1-65535");
+      return;
     }
+    if (!newForward.internal_ip) {
+      setError("Internal IP is required");
+      return;
+    }
+    setError("");
+    const forward: PortForward = {
+      id: crypto.randomUUID(),
+      external_port: ext,
+      internal_ip: newForward.internal_ip,
+      internal_port: intr,
+      protocol: newForward.protocol || "tcp",
+      enabled: newForward.enabled ?? true,
+      description: newForward.description,
+    };
+    await addPortForward(forward);
+    setNewForward({ external_port: 0, internal_ip: "", internal_port: 0, protocol: "tcp", enabled: true, description: "" });
+    await fetchPortForwards();
+  };
+
+  const handleDeleteForward = async (id: string) => {
+    await deletePortForward(id);
+    await fetchPortForwards();
   };
 
   if (loading) {
@@ -121,11 +148,13 @@ export default function FirewallPage() {
           </Button>
         </div>
 
+        {error && <p className="text-red-brand text-sm mb-4">{error}</p>}
+
         {activeTab === "firewall" && (
           <>
             <Card className="mb-6">
               <h3>Add Firewall Rule</h3>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                 <div>
                   <label className="block text-sm text-text-secondary mb-2">Port</label>
                   <Input
@@ -144,6 +173,7 @@ export default function FirewallPage() {
                   >
                     <option value="tcp">TCP</option>
                     <option value="udp">UDP</option>
+                    <option value="icmp">ICMP</option>
                   </select>
                 </div>
                 <div>
@@ -156,6 +186,14 @@ export default function FirewallPage() {
                     <option value="allow">Allow</option>
                     <option value="drop">Drop</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-text-secondary mb-2">Source IP</label>
+                  <Input
+                    value={newRule.source_ip || ""}
+                    onChange={e => setNewRule({ ...newRule, source_ip: e.target.value })}
+                    placeholder="0.0.0.0/0"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm text-text-secondary mb-2">Description</label>
@@ -178,7 +216,7 @@ export default function FirewallPage() {
               {firewallRules.length === 0 ? (
                 <p className="text-text-secondary">No firewall rules configured</p>
               ) : (
-<div className="space-y-1">
+                <div className="space-y-1">
                   {firewallRules.map(rule => (
                     <div
                       key={rule.id}
@@ -196,13 +234,13 @@ export default function FirewallPage() {
                         >
                           {rule.action}
                         </span>
+                        {rule.source_ip && (
+                          <span className="text-xs text-text-muted font-mono">{rule.source_ip}</span>
+                        )}
                         <span className="text-sm text-text-secondary">{rule.description}</span>
                       </div>
                       <button
-                        onClick={() => {
-                          deleteFirewallRule(rule.id);
-                          fetchFirewallRules();
-                        }}
+                        onClick={() => handleDeleteRule(rule.id)}
                         className="p-1.5 hover:bg-bg-deep rounded text-red-brand"
                       >
                         <Trash2 size={14} />
@@ -294,10 +332,7 @@ export default function FirewallPage() {
                         <span className="text-sm text-text-secondary">{forward.description}</span>
                       </div>
                       <button
-                        onClick={() => {
-                          deletePortForward(forward.id);
-                          fetchPortForwards();
-                        }}
+                        onClick={() => handleDeleteForward(forward.id)}
                         className="p-1.5 hover:bg-bg-deep rounded text-red-brand"
                       >
                         <Trash2 size={14} />

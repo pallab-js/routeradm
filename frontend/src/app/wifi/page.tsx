@@ -42,7 +42,8 @@ export default function WifiPage() {
     
     loadWifi();
     return () => { mounted = false; };
-  }, [piUrl, token, fetchWifi]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piUrl, token]);
 
   const handleSave = async () => {
     setSaving(true);
